@@ -51,7 +51,7 @@ cask "cocaine" do
   zap trash: "~/Library/Preferences/local.cocaine.toggle.plist"
 
   caveats <<~EOS
-    Open Cocaine once: it asks for Touch ID (or your password) a single time, to allow exactly
-    `pmset -a disablesleep 1|0`. `brew uninstall` removes that permission again; upgrades keep it.
+    First launch only: Cocaine asks for Touch ID (or your password) once, to allow exactly
+    `pmset -a disablesleep 1|0`. Updates never ask again; `brew uninstall` removes that permission.
   EOS
 end
