@@ -1,6 +1,6 @@
 cask "cocaine" do
-  version "1.2"
-  sha256 "e101c4b499708da3b749b44abc5589cdb790af5bc5a6d108a26d58897ebb6c3a"
+  version "1.3"
+  sha256 "20f9d9c2d284f4313dac21157641deb072f3e110c5c03c89765f376cdb2e782c"
 
   url "https://github.com/Mattiakart/cocaine/releases/download/v#{version}/Cocaine-#{version}.dmg"
   name "Cocaine"
