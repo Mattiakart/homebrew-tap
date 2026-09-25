@@ -16,12 +16,15 @@ cask "cocaine" do
 
   app "Cocaine.app"
 
-  # Turn the sleep override off before removing the sudo rule that allows changing it.
+  # Turn the sleep override off before removing the sudo rule that allows changing it. Not `sudo: true`:
+  # Homebrew runs that as `sudo -E`, which Cocaine's narrow rule (no SETENV) refuses. Plain `sudo -n` uses the
+  # rule without a password; if the rule is gone, fall back to a normal password prompt.
   uninstall quit:   "local.cocaine.toggle",
             script: {
-              executable: "/usr/bin/pmset",
-              args:       ["-a", "disablesleep", "0"],
-              sudo:       true,
+              executable:   "/bin/sh",
+              args:         ["-c", "/usr/bin/sudo -n /usr/bin/pmset -a disablesleep 0 || " \
+                                   "/usr/bin/sudo /usr/bin/pmset -a disablesleep 0"],
+              must_succeed: false,
             },
             delete: "/etc/sudoers.d/cocaine"
 
