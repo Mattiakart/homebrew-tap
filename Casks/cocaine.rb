@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 cask "cocaine" do
-  version "1.4"
-  sha256 "d23f33ebc77b003363d01e0d76a30d64d4019bc80d3554b64caef71e3c2f6941"
+  version "1.5"
+  sha256 "216fb3a325d2095c0034bb4dbaced85f46150b67647ae633f246e44f3c969baf"
 
   url "https://github.com/Mattiakart/cocaine/releases/download/v#{version}/Cocaine-#{version}.dmg"
   name "Cocaine"
@@ -18,12 +18,25 @@ cask "cocaine" do
 
   app "Cocaine.app"
 
-  # Homebrew only: clear the quarantine flag so macOS doesn't show "Open Anyway" (the app isn't notarized).
   postflight_steps do
+    # Clear the quarantine flag so macOS doesn't show "Open Anyway" (the app isn't notarized).
     run "/usr/bin/xattr",
         args:           ["-dr", "com.apple.quarantine", "{{appdir}}/Cocaine.app"],
         writable_paths: ["{{appdir}}/Cocaine.app"],
         must_succeed:   false
+    # First install only: set up Cocaine's sudo rule here, where Homebrew asks for your password in Terminal
+    # (Touch ID with "Touch ID for sudo" on) instead of the app showing macOS's admin warning.
+    # Upgrades find the rule and skip this.
+    unless_path_exists "/etc/sudoers.d/cocaine" do
+      run "/bin/sh", args: ["-c", <<~SH], sudo: true, must_succeed: false
+        u="${SUDO_USER:-$(/usr/bin/stat -f%Su /dev/console)}"
+        case "$u" in ""|root|*[!A-Za-z0-9._-]*) exit 1 ;; esac
+        t=$(/usr/bin/mktemp /tmp/cocaine.XXXXXX) || exit 1
+        /usr/bin/printf '%s ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1, /usr/bin/pmset -a disablesleep 0, /bin/rm -f /etc/sudoers.d/cocaine\n' "$u" > "$t"
+        /usr/sbin/visudo -cf "$t" >/dev/null && /usr/bin/install -m 0440 -o root -g wheel "$t" /etc/sudoers.d/cocaine
+        r=$?; /bin/rm -f "$t"; exit $r
+      SH
+    end
   end
 
   # Quitting Cocaine turns it off. A real uninstall also removes its sudo rule, passwordless because the rule allows
@@ -51,7 +64,7 @@ cask "cocaine" do
   zap trash: "~/Library/Preferences/local.cocaine.toggle.plist"
 
   caveats <<~EOS
-    First launch only: Cocaine asks for Touch ID (or your password) once, to allow exactly
-    `pmset -a disablesleep 1|0`. Updates never ask again; `brew uninstall` removes that permission.
+    The password asked above (once, on first install) lets Cocaine run exactly `pmset -a disablesleep 1|0`.
+    Updates never ask again, and `brew uninstall` removes that permission without asking.
   EOS
 end
