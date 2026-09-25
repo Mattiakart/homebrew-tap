@@ -1,6 +1,6 @@
 cask "cocaine" do
-  version "1.0"
-  sha256 "f3eab6ed6bf4ffd7b2ab9817ff93a20d7c7a89080109b12bdd9ac5ab61fd4d54"
+  version "1.1"
+  sha256 "56f028e8dc8f5b710a7a8b4066eab846c2cc60fdb4c53d638cb4b7da51f9f744"
 
   url "https://github.com/Mattiakart/cocaine/releases/download/v#{version}/Cocaine-#{version}.dmg"
   name "Cocaine"
@@ -16,19 +16,20 @@ cask "cocaine" do
 
   app "Cocaine.app"
 
-  # Turn the sleep override off before removing the sudo rule that allows changing it. Not `sudo: true`:
-  # Homebrew runs that as `sudo -E`, which Cocaine's narrow rule (no SETENV) refuses. Plain `sudo -n` uses the
-  # rule without a password; if the rule is gone, fall back to a normal password prompt.
+  # Quitting Cocaine turns it off; the script covers the case where it wasn't running. Not `sudo: true`:
+  # Homebrew runs that as `sudo -E`, which Cocaine's narrow sudo rule (no SETENV) refuses.
   uninstall quit:   "local.cocaine.toggle",
             script: {
               executable:   "/bin/sh",
-              args:         ["-c", "/usr/bin/sudo -n /usr/bin/pmset -a disablesleep 0 || " \
+              args:         ["-c", "/usr/bin/pmset -g | /usr/bin/grep -q 'SleepDisabled[[:space:]]*1' || exit 0; " \
+                                   "/usr/bin/sudo -n /usr/bin/pmset -a disablesleep 0 || " \
                                    "/usr/bin/sudo /usr/bin/pmset -a disablesleep 0"],
               must_succeed: false,
-            },
-            delete: "/etc/sudoers.d/cocaine"
+            }
 
-  zap trash: "~/Library/Preferences/local.cocaine.toggle.plist"
+  # The sudo rule is removed only with --zap, so `brew upgrade` doesn't ask for a password on every update.
+  zap delete: "/etc/sudoers.d/cocaine",
+      trash:  "~/Library/Preferences/local.cocaine.toggle.plist"
 
   caveats <<~EOS
     Cocaine is not notarized by Apple. The first time you open it, macOS blocks it:
@@ -36,5 +37,6 @@ cask "cocaine" do
 
     On first launch it asks for your admin password once, to allow exactly
     `pmset -a disablesleep 1` and `pmset -a disablesleep 0`.
+    `brew uninstall --zap cocaine` also removes that rule.
   EOS
 end
