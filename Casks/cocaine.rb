@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 cask "cocaine" do
-  version "1.7.13"
-  sha256 "67c2e2408d165be1eddb15a2b1d0bb06fed80a722dfd74bc585a48efb88c5a64"
+  version "1.7.14"
+  sha256 "358df4e08b33c6dab849ba44beab7668a6bc3ff2ba40d0efa252bb5407563012"
 
   url "https://github.com/Mattiakart/cocaine/releases/download/v#{version}/Cocaine-#{version}.dmg"
   name "Cocaine"
