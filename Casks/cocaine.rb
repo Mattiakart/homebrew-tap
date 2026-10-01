@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 cask "cocaine" do
-  version "1.7.19"
-  sha256 "dcc01e301956e975e0ea03e8f9428a60e615d087a9736b2dc0f6c054faf57950"
+  version "1.7.20"
+  sha256 "f20d335de7f58a4e728ecc1cd66fd06e46ef51d071354ee2ab0a6c37695d20ff"
 
   url "https://github.com/Mattiakart/cocaine/releases/download/v#{version}/Cocaine-#{version}.dmg"
   name "Cocaine"
@@ -32,7 +32,7 @@ cask "cocaine" do
         u="${SUDO_USER:-$(/usr/bin/stat -f%Su /dev/console)}"
         case "$u" in ""|root|*[!A-Za-z0-9._-]*) exit 1 ;; esac
         t=$(/usr/bin/mktemp /tmp/cocaine.XXXXXX) || exit 1
-        /usr/bin/printf '%s ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1, /usr/bin/pmset -a disablesleep 0, /bin/rm -f /etc/sudoers.d/cocaine\n' "$u" > "$t"
+        /usr/bin/printf '%s ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1, /usr/bin/pmset -a disablesleep 0, /usr/bin/pmset schedule wake * cocaine, /usr/bin/pmset schedule cancel wake * cocaine, /bin/rm -f /etc/sudoers.d/cocaine\n' "$u" > "$t"
         /usr/sbin/visudo -cf "$t" >/dev/null && /usr/bin/install -m 0440 -o root -g wheel "$t" /etc/sudoers.d/cocaine
         r=$?; /bin/rm -f "$t"; exit $r
       SH
