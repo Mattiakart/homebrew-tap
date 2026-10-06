@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 cask "cocaine" do
-  version "2.2.3"
-  sha256 "1f21459b41249fa3648c6e8b9dcfd10022154069d46ae77c77ae6a9e0340be1f"
+  version "2.3.0"
+  sha256 "9ce1b86a79a4628eb03dda1ee28fe469807c4de8f4e8a5d6247697adf9f3ad55"
 
   url "https://github.com/Mattiakart/cocaine/releases/download/v#{version}/Cocaine-#{version}.dmg"
   name "Cocaine"
@@ -39,12 +39,14 @@ cask "cocaine" do
     end
   end
 
-  # Quitting Cocaine turns it off. A real uninstall also removes its AI alerts hooks (from each AI tool's settings,
-  # leaving the rest as it was) and its sudo rule, passwordless because the rule allows exactly that (older
-  # rules fall back to one Touch ID prompt); `brew upgrade`/`reinstall` keep both, so updates never ask for anything.
+  # Quitting Cocaine puts sleep back as it was before Cocaine (its crash watchdog does the same if it dies).
+  # `brew upgrade`/`reinstall`: before the old version quits, it is told an update is coming, so sleep stays as it is
+  # and the new version takes the session over (3 minutes at most, then the watchdog puts sleep back). Nothing else.
+  # A real uninstall also undoes anything a crashed Cocaine left (sleep setting, frozen system HUD, display helper, state
+  # files), removes its AI alerts hooks (leaving the rest of each tool's settings as it was) and its sudo rule,
+  # passwordless because the rule allows exactly that (older rules fall back to one Touch ID prompt).
   # Not `sudo: true`: Homebrew runs that as `sudo -E`, which the narrow rule refuses.
-  uninstall quit:   "local.cocaine.toggle",
-            script: {
+  uninstall early_script: {
               executable:   "/bin/sh",
               args:         ["-c", <<~SH],
                 up=0; p=$PPID
@@ -52,12 +54,34 @@ cask "cocaine" do
                   case "$(/bin/ps -o args= -p "$p")" in *"brew.rb upgrade"*|*"brew.rb reinstall"*|*"brew.rb install"*) up=1 ;; esac
                   p=$(/bin/ps -o ppid= -p "$p" | /usr/bin/tr -d " "); [ -n "$p" ] && [ "$p" -gt 1 ] || break
                 done
-                if /usr/bin/pmset -g | /usr/bin/grep -q "SleepDisabled[[:space:]]*1"; then
-                  /usr/bin/sudo -n /usr/bin/pmset -a disablesleep 0 2>/dev/null || /usr/bin/sudo /usr/bin/pmset -a disablesleep 0
-                fi
+                [ "$up" = 1 ] || exit 0
+                for a in /Applications/Cocaine.app "$HOME/Applications/Cocaine.app"; do
+                  /usr/bin/grep -q '^# cocaine-recovery: 1' "$a/Contents/Resources/cocaine" 2>/dev/null || continue
+                  "$a/Contents/MacOS/Cocaine" --prepare-update >/dev/null 2>&1
+                done
+                exit 0
+              SH
+              must_succeed: false,
+            },
+            quit:         "local.cocaine.toggle",
+            script:       {
+              executable:   "/bin/sh",
+              args:         ["-c", <<~SH],
+                up=0; p=$PPID
+                for i in 1 2 3 4 5; do
+                  case "$(/bin/ps -o args= -p "$p")" in *"brew.rb upgrade"*|*"brew.rb reinstall"*|*"brew.rb install"*) up=1 ;; esac
+                  p=$(/bin/ps -o ppid= -p "$p" | /usr/bin/tr -d " "); [ -n "$p" ] && [ "$p" -gt 1 ] || break
+                done
                 [ "$up" = 1 ] && exit 0
                 for a in /Applications/Cocaine.app "$HOME/Applications/Cocaine.app"; do
-                  [ -x "$a/Contents/MacOS/Cocaine" ] && { "$a/Contents/MacOS/Cocaine" --ai-alerts off >/dev/null 2>&1; break; }
+                  [ -x "$a/Contents/MacOS/Cocaine" ] || continue
+                  if /usr/bin/grep -q '^# cocaine-recovery: 1' "$a/Contents/Resources/cocaine" 2>/dev/null; then
+                    "$a/Contents/MacOS/Cocaine" --uninstall-cleanup >/dev/null 2>&1
+                  elif /usr/bin/pmset -g | /usr/bin/grep -q "SleepDisabled[[:space:]]*1"; then   # an older app: as before
+                    /usr/bin/sudo -n /usr/bin/pmset -a disablesleep 0 2>/dev/null
+                  fi
+                  "$a/Contents/MacOS/Cocaine" --ai-alerts off >/dev/null 2>&1
+                  break
                 done
                 [ -e /etc/sudoers.d/cocaine ] || exit 0
                 /usr/bin/sudo -n /bin/rm -f /etc/sudoers.d/cocaine 2>/dev/null || /usr/bin/osascript -e 'do shell script "/bin/rm -f /etc/sudoers.d/cocaine" with prompt "Cocaine: removing its sleep permission." with administrator privileges'
@@ -65,7 +89,10 @@ cask "cocaine" do
               must_succeed: false,
             }
 
-  zap trash: "~/Library/Preferences/local.cocaine.toggle.plist"
+  zap trash: [
+    "~/Library/Application Support/Cocaine",
+    "~/Library/Preferences/local.cocaine.toggle.plist",
+  ]
 
   caveats <<~EOS
     The password asked above (once, on first install) lets Cocaine run exactly `pmset -a disablesleep 1|0`.
