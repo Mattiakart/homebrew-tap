@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 cask "cocaine" do
-  version "2.4.0"
-  sha256 "ebe752341f249913c1d4bd5e92016481f1d541cdc32ba025b5dec0dbf98a3096"
+  version "2.5.0"
+  sha256 "47a4cdbe02425a4e62a828ef1b8feb08db553b99fe113551ec46ecaeeeb86ccf"
 
   url "https://github.com/Mattiakart/cocaine/releases/download/v#{version}/Cocaine-#{version}.dmg"
   name "Cocaine"
@@ -45,6 +45,9 @@ cask "cocaine" do
   # A real uninstall also undoes anything a crashed Cocaine left (sleep setting, frozen system HUD, display helper, state
   # files), removes its AI alerts hooks (leaving the rest of each tool's settings as it was) and its sudo rule,
   # passwordless because the rule allows exactly that (older rules fall back to one Touch ID prompt).
+  # If Cocaine is still running after `quit` and `signal` (hung), --uninstall-cleanup ends it itself (pid + start time) and
+  # waits; if even that fails it exits 75 and the sudo rule is KEPT: the Cocaine left running notices its app was deleted
+  # and quits through its engine copy, which still needs the rule to put sleep back.
   # Not `sudo: true`: Homebrew runs that as `sudo -E`, which the narrow rule refuses.
   uninstall early_script: {
               executable:   "/bin/sh",
@@ -64,6 +67,7 @@ cask "cocaine" do
               must_succeed: false,
             },
             quit:         "local.cocaine.toggle",
+            signal:       [["TERM", "local.cocaine.toggle"]],
             script:       {
               executable:   "/bin/sh",
               args:         ["-c", <<~SH],
@@ -73,16 +77,22 @@ cask "cocaine" do
                   p=$(/bin/ps -o ppid= -p "$p" | /usr/bin/tr -d " "); [ -n "$p" ] && [ "$p" -gt 1 ] || break
                 done
                 [ "$up" = 1 ] && exit 0
+                rc=0
                 for a in /Applications/Cocaine.app "$HOME/Applications/Cocaine.app"; do
                   [ -x "$a/Contents/MacOS/Cocaine" ] || continue
                   if /usr/bin/grep -q '^# cocaine-recovery: 1' "$a/Contents/Resources/cocaine" 2>/dev/null; then
-                    "$a/Contents/MacOS/Cocaine" --uninstall-cleanup >/dev/null 2>&1
+                    "$a/Contents/MacOS/Cocaine" --uninstall-cleanup >/dev/null 2>&1; rc=$?
                   elif /usr/bin/pmset -g | /usr/bin/grep -q "SleepDisabled[[:space:]]*1"; then   # an older app: as before
                     /usr/bin/sudo -n /usr/bin/pmset -a disablesleep 0 2>/dev/null
                   fi
                   "$a/Contents/MacOS/Cocaine" --ai-alerts off >/dev/null 2>&1
                   break
                 done
+                if [ "$rc" = 75 ]; then
+                  echo "Cocaine is still running and couldn't be stopped: its sleep permission is kept so it can still put sleep back." >&2
+                  echo "Quit it (or run: sudo pmset -a disablesleep 0), then remove the permission: sudo rm /etc/sudoers.d/cocaine" >&2
+                  exit 0
+                fi
                 [ -e /etc/sudoers.d/cocaine ] || exit 0
                 /usr/bin/sudo -n /bin/rm -f /etc/sudoers.d/cocaine 2>/dev/null || /usr/bin/osascript -e 'do shell script "/bin/rm -f /etc/sudoers.d/cocaine" with prompt "Cocaine: removing its sleep permission." with administrator privileges'
               SH
